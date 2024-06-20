@@ -154,17 +154,13 @@ class Superwall extends BridgeIdInstantiable {
 
   // Asynchronous method to set the subscription status of the user
   Future<void> setSubscriptionStatus(SubscriptionStatus status) async {
-    print("Calling subs status!!");
     await _waitForBridgeInstanceCreation();
 
-    print("Got bridheee");
     final subscriptionStatusBridgeId = status.bridgeId;
 
-    print("Gona call");
     var result = await bridgeId.communicator.invokeBridgeMethod(
         'setSubscriptionStatus',
         {'subscriptionStatusBridgeId': subscriptionStatusBridgeId});
-    print("set it");
   }
 
   // Asynchronous method to check if Superwall has finished configuring
