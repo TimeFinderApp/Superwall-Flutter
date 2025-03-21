@@ -31,6 +31,12 @@ class BridgingCreator(
 
     companion object {
         private var _shared: MutableStateFlow<BridgingCreator?> = MutableStateFlow(null)
+        
+        // Add static reference to last known binding
+        @Volatile
+        var lastKnownBinding: FlutterPlugin.FlutterPluginBinding? = null
+            private set
+            
         suspend fun shared() : BridgingCreator = _shared.filterNotNull().first()
 
         private var _flutterPluginBinding: MutableStateFlow<FlutterPlugin.FlutterPluginBinding?> =
@@ -39,7 +45,11 @@ class BridgingCreator(
         suspend fun waitForPlugin() : FlutterPlugin.FlutterPluginBinding {
             return _flutterPluginBinding.filterNotNull().first()
         }
+        
         fun setFlutterPlugin(binding: FlutterPlugin.FlutterPluginBinding) {
+            // Save last known binding first (even if we don't use it now)
+            lastKnownBinding = binding
+            
             // Only allow binding to occur once. It appears that if binding is set multiple
             // times (due to other SDK interference), we'll lose access to the
             // SuperwallKitFlutterPlugin current activity
@@ -57,14 +67,15 @@ class BridgingCreator(
                     communicator.setMethodCallHandler(bridge)
                 }
             }
-
         }
     }
 
+    // Critical change: Don't fully tear down the instance
     fun tearDown() {
-        print("Did tearDown BridgingCreator")
-        _shared.value = null
-        _flutterPluginBinding.value = null
+        // Only print a log, don't nullify shared instance
+        println("BridgingCreator tearDown called - maintaining instance for reattachment")
+        // Do NOT set _shared.value = null
+        // Do NOT set _flutterPluginBinding.value = null
     }
 
     // Generic function to retrieve a bridge instance

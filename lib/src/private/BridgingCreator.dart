@@ -13,10 +13,11 @@ class BridgingCreator {
   // This will later be used when invoking creation to pass in initialization arguments
   static final Map<String, Map<String, dynamic>> _metadataByBridgeId = {};
 
-  static BridgeId _createBridgeId(
-      {String? givenId,
-      required BridgeClass bridgeClass,
-      Map<String, dynamic>? initializationArgs}) {
+  static BridgeId _createBridgeId({
+    String? givenId,
+    required BridgeClass bridgeClass,
+    Map<String, dynamic>? initializationArgs,
+  }) {
     BridgeId bridgeId = givenId ?? bridgeClass.generateBridgeId();
     _metadataByBridgeId[bridgeId] = {'args': initializationArgs};
 
@@ -28,8 +29,10 @@ class BridgingCreator {
         BridgingCreator._metadataByBridgeId[bridgeId] ?? {};
     Map<String, dynamic>? initializationArgs = metadata['args'];
 
-    await _channel.invokeMethod('createBridgeInstance',
-        {'bridgeId': bridgeId, 'args': initializationArgs});
+    await _channel.invokeMethod('createBridgeInstance', {
+      'bridgeId': bridgeId,
+      'args': initializationArgs,
+    });
 
     metadata['bridgeInstanceCreated'] = 'true';
     _metadataByBridgeId[bridgeId] = metadata;
@@ -52,18 +55,22 @@ class BridgingCreator {
 abstract class BridgeIdInstantiable {
   BridgeId bridgeId;
 
-  BridgeIdInstantiable(
-      {required BridgeClass bridgeClass,
-      BridgeId? bridgeId,
-      BridgeId? givenId,
-      Map<String, dynamic>? initializationArgs})
-      : bridgeId = bridgeId ??
-            BridgingCreator._createBridgeId(
-                givenId: givenId,
-                bridgeClass: bridgeClass,
-                initializationArgs: initializationArgs) {
-    assert(this.bridgeId.endsWith('-bridgeId'),
-        'Make sure bridgeIds end with "-bridgeId"');
+  BridgeIdInstantiable({
+    required BridgeClass bridgeClass,
+    BridgeId? bridgeId,
+    BridgeId? givenId,
+    Map<String, dynamic>? initializationArgs,
+  }) : bridgeId =
+           bridgeId ??
+           BridgingCreator._createBridgeId(
+             givenId: givenId,
+             bridgeClass: bridgeClass,
+             initializationArgs: initializationArgs,
+           ) {
+    assert(
+      this.bridgeId.endsWith('-bridgeId'),
+      'Make sure bridgeIds end with "-bridgeId"',
+    );
     this.bridgeId.associate(this);
     this.bridgeId.communicator.setMethodCallHandler(handleMethodCall);
   }
@@ -75,8 +82,10 @@ abstract class BridgeIdInstantiable {
 extension MethodChannelBridging on MethodChannel {
   // Will invoke the method as usual, but will wait for any native Ids to be
   // created if they don't already exist.
-  Future<T?> invokeBridgeMethod<T>(String method,
-      [Map<String, Object?>? arguments]) async {
+  Future<T?> invokeBridgeMethod<T>(
+    String method, [
+    Map<String, Object?>? arguments,
+  ]) async {
     // Check if arguments is a Map and contains native IDs
     if (arguments != null) {
       for (var value in arguments.values) {
@@ -89,7 +98,17 @@ extension MethodChannelBridging on MethodChannel {
 
     await bridgeId.ensureBridgeCreated();
 
-    return invokeMethod(method, arguments);
+    try {
+      return invokeMethod(method, arguments);
+    } catch (e) {
+      // Simple retry for MissingPluginException only
+      if (e is PlatformException && e.code == 'MissingPluginException') {
+        // Wait briefly and retry once
+        await Future.delayed(Duration(milliseconds: 300));
+        return invokeMethod(method, arguments);
+      }
+      rethrow;
+    }
   }
 
   BridgeId get bridgeId {
@@ -105,9 +124,10 @@ extension FlutterMethodCall on MethodCall {
   BridgeId bridgeId(String key) {
     final BridgeId? bridgeId = argument<String>(key);
     assert(
-        bridgeId != null,
-        'Attempting to fetch a bridge Id in Dart that has '
-        'not been created by the BridgeCreator natively.');
+      bridgeId != null,
+      'Attempting to fetch a bridge Id in Dart that has '
+      'not been created by the BridgeCreator natively.',
+    );
 
     return bridgeId ?? '';
   }

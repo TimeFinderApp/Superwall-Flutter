@@ -49,8 +49,10 @@ class SuperwallkitFlutterPlugin : FlutterPlugin, ActivityAware {
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         CoroutineScope(Dispatchers.Main).launch {
-                BridgingCreator.shared().tearDown()
-                instance = null
+            // Call tearDown, but our modified version preserves the instance
+            BridgingCreator.shared().tearDown()
+            // Don't set instance to null
+            // instance = null
         }
     }
 

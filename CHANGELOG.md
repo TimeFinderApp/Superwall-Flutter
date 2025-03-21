@@ -2,6 +2,13 @@
 
 The changelog for `Superwall`. Also see the [releases](https://github.com/superwall/Superwall-Flutter/releases) on GitHub.
 
+## 2.0.8
+
+### Fixes
+
+- Fixes MissingPluginException during app backgrounding/foregrounding on Android
+- Maintains plugin state across Flutter engine detachment events
+
 ## 2.0.7
 
 - Fixes issue when accessing `presentedByPlacement*` properties from a custom placement
