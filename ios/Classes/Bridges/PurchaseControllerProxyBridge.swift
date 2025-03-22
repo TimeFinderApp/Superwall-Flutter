@@ -14,7 +14,7 @@ public class PurchaseControllerProxyBridge: BridgeInstance, PurchaseController {
       print("WARNING: Failed to invoke purchaseFromAppStore")
       return .failed(PurchaseControllerProxyPluginError())
     }
-    guard let purchaseResultBridge: PurchaseResultBridge = purchaseResultBridgeId.bridgeInstance() else {
+    guard let purchaseResultBridge: PurchaseResultBridge = purchaseResultBridgeId.bridgeInstanceTyped() else {
       print("WARNING: Failed to get bridge instance")
       return .failed(PurchaseControllerProxyPluginError())
     }
@@ -28,7 +28,7 @@ public class PurchaseControllerProxyBridge: BridgeInstance, PurchaseController {
       print("WARNING: Failed to invoke restorePurchases")
       return .failed(PurchaseControllerProxyPluginError());
     }
-    guard let restorationResultBridge: RestorationResultBridge = restorationResultBridgeId.bridgeInstance() else {
+    guard let restorationResultBridge: RestorationResultBridge = restorationResultBridgeId.bridgeInstanceTyped() else {
       print("WARNING: Failed to get bridge instance")
       return .failed(PurchaseControllerProxyPluginError())
     }

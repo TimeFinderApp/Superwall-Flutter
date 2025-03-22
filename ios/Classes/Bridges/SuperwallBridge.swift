@@ -41,8 +41,7 @@ public class SuperwallBridge: BridgeInstance, FlutterStreamHandler {
     switch call.method {
     case "setDelegate":
       guard
-        let delegateProxyBridge: SuperwallDelegate = call.bridgeInstance(
-          for: "delegateProxyBridgeId")
+        let delegateProxyBridge: SuperwallDelegate = call.bridgeInstanceTyped(for: "delegateProxyBridgeId")
       else {
         result(call.badArgs)
         return
@@ -113,8 +112,7 @@ public class SuperwallBridge: BridgeInstance, FlutterStreamHandler {
     case "setSubscriptionStatus":
       // Implement logic to set the subscription status of the user
       guard
-        let subscriptionStatusBridge: SubscriptionStatusBridge = call.bridgeInstance(
-          for: "subscriptionStatusBridgeId")
+        let subscriptionStatusBridge: SubscriptionStatusBridge = call.bridgeInstanceTyped(for: "subscriptionStatusBridgeId")
       else {
         result(call.badArgs)
         return
@@ -185,8 +183,7 @@ public class SuperwallBridge: BridgeInstance, FlutterStreamHandler {
         result(call.badArgs)
         return
       }
-      let purchaseControllerProxyBridge: PurchaseControllerProxyBridge? = call.bridgeInstance(
-        for: "purchaseControllerProxyBridgeId")
+      let purchaseControllerProxyBridge: PurchaseControllerProxyBridge? = call.bridgeInstanceTyped(for: "purchaseControllerProxyBridgeId")
 
       let options: SuperwallOptions? = {
         guard let optionsValue: [String: Any] = call.argument(for: "options") else {
@@ -200,8 +197,7 @@ public class SuperwallBridge: BridgeInstance, FlutterStreamHandler {
       Superwall.configure(
         apiKey: apiKey, purchaseController: purchaseControllerProxyBridge, options: options
       ) {
-        let completionBlockProxyBridge: CompletionBlockProxyBridge? = call.bridgeInstance(
-          for: "completionBlockProxyBridgeId")
+        let completionBlockProxyBridge: CompletionBlockProxyBridge? = call.bridgeInstanceTyped(for: "completionBlockProxyBridgeId")
         completionBlockProxyBridge?.callCompletionBlock()
       }
 
@@ -229,8 +225,7 @@ public class SuperwallBridge: BridgeInstance, FlutterStreamHandler {
 
       let handler: PaywallPresentationHandler? = {
         guard
-          let handlerProxyBridge: PaywallPresentationHandlerProxyBridge = call.bridgeInstance(
-            for: "handlerProxyBridgeId")
+          let handlerProxyBridge: PaywallPresentationHandlerProxyBridge = call.bridgeInstanceTyped(for: "handlerProxyBridgeId")
         else {
           return nil
         }
@@ -239,9 +234,7 @@ public class SuperwallBridge: BridgeInstance, FlutterStreamHandler {
       }()
 
       Superwall.shared.register(placement: placement, params: params, handler: handler) {
-        if let featureBlockProxyBridge: CompletionBlockProxyBridge = call.bridgeInstance(
-          for: "featureBlockProxyBridgeId")
-        {
+        if let featureBlockProxyBridge: CompletionBlockProxyBridge = call.bridgeInstanceTyped(for: "featureBlockProxyBridgeId") {
           featureBlockProxyBridge.callCompletionBlock()
         }
       }

@@ -16,14 +16,24 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.util.WeakHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
+// Application lifecycle tracking enum
+enum class ApplicationLifecycle {
+    FOREGROUND, BACKGROUND, TRANSITIONING
+}
+
 class SuperwallkitFlutterPlugin : FlutterPlugin, ActivityAware {
     var currentActivity: Activity? = null
+    
+    // Add application lifecycle tracking
+    private val applicationLifecycle = AtomicReference(ApplicationLifecycle.BACKGROUND)
 
     companion object {
-        private var instance: SuperwallkitFlutterPlugin? = null
+        var instance: SuperwallkitFlutterPlugin? = null
+            private set
         val reattachementCount = AtomicInteger(0)
         val lock = Object()
         val currentActivity: Activity?
@@ -43,16 +53,24 @@ class SuperwallkitFlutterPlugin : FlutterPlugin, ActivityAware {
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         synchronized(lock) {
-                BridgingCreator.setFlutterPlugin(flutterPluginBinding)
+            BridgingCreator.setFlutterPlugin(flutterPluginBinding)
+            reattachementCount.incrementAndGet()
+            println("SuperwallkitFlutterPlugin: onAttachedToEngine - reattachment count: ${reattachementCount.get()}")
         }
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        applicationLifecycle.set(ApplicationLifecycle.TRANSITIONING)
         CoroutineScope(Dispatchers.Main).launch {
-            // Call tearDown, but our modified version preserves the instance
-            BridgingCreator.shared().tearDown()
-            // Don't set instance to null
-            // instance = null
+            try {
+                // Call tearDown, but our modified version preserves the instance
+                BridgingCreator.shared().tearDown()
+                println("SuperwallkitFlutterPlugin: onDetachedFromEngine - plugin instance preserved")
+                // Don't set instance to null - we need to maintain the reference
+            } catch (e: Exception) {
+                println("Error during plugin detachment: ${e.message}")
+                e.printStackTrace()
+            }
         }
     }
 
@@ -60,17 +78,52 @@ class SuperwallkitFlutterPlugin : FlutterPlugin, ActivityAware {
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
         currentActivity = binding.activity
+        applicationLifecycle.set(ApplicationLifecycle.FOREGROUND)
+        
+        // Proactively check and reattach if needed when coming to foreground
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                if (!BridgingCreator.checkPluginHealth()) {
+                    // App is coming to foreground, ensure plugin is registered
+                    println("SuperwallkitFlutterPlugin: Plugin health check failed, forcing reattachment")
+                    val flutterBinding = BridgingCreator.lastKnownBinding
+                    BridgingCreator.forceReattachment(flutterBinding)
+                } else {
+                    println("SuperwallkitFlutterPlugin: Plugin health check passed")
+                }
+            } catch (e: Exception) {
+                println("Error during health check in onAttachedToActivity: ${e.message}")
+                e.printStackTrace()
+            }
+        }
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
+        applicationLifecycle.set(ApplicationLifecycle.TRANSITIONING)
         currentActivity = null
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
         currentActivity = binding.activity
+        applicationLifecycle.set(ApplicationLifecycle.FOREGROUND)
+        
+        // Check health after configuration changes too
+        CoroutineScope(Dispatchers.Main).launch {
+            try {
+                if (!BridgingCreator.checkPluginHealth()) {
+                    println("SuperwallkitFlutterPlugin: Plugin health check failed after config change, forcing reattachment")
+                    val flutterBinding = BridgingCreator.lastKnownBinding
+                    BridgingCreator.forceReattachment(flutterBinding)
+                }
+            } catch (e: Exception) {
+                println("Error during health check in onReattachedToActivityForConfigChanges: ${e.message}")
+                e.printStackTrace()
+            }
+        }
     }
 
     override fun onDetachedFromActivity() {
+        applicationLifecycle.set(ApplicationLifecycle.BACKGROUND)
         currentActivity = null
     }
 
@@ -81,7 +134,7 @@ fun <T> MethodCall.argumentForKey(key: String): T? {
     return this.argument(key)
 }
 
-// Make sure to provide the key for the bridge (which provides the bridgeId)
+// Enhanced bridgeInstance with better error handling
 suspend fun <T> MethodCall.bridgeInstance(key: String): T? {
     BreadCrumbs.append("SuperwallKitFlutterPlugin.kt: Invoke bridgeInstance(key:) on $this. Key is $key")
     val bridgeId = this.argument<String>(key)
@@ -89,13 +142,39 @@ suspend fun <T> MethodCall.bridgeInstance(key: String): T? {
         Log.e("SWKP", "No bridgeId found for key: $key")
         return null
     }
-    BreadCrumbs.append("SuperwallKitFlutterPlugin.kt: Invoke bridgeInstance(key:) in on $this. Found bridgeId $bridgeId")
-    return BridgingCreator.shared().bridgeInstance(bridgeId)
+    
+    try {
+        BreadCrumbs.append("SuperwallKitFlutterPlugin.kt: Invoke bridgeInstance(key:) in on $this. Found bridgeId $bridgeId")
+        return BridgingCreator.shared().bridgeInstance(bridgeId)
+    } catch (e: Exception) {
+        // If we can't get the instance, try to force reattachment and retry once
+        Log.e("SWKP", "Error getting bridge instance: ${e.message}")
+        BridgingCreator.forceReattachment(BridgingCreator.lastKnownBinding)
+        kotlinx.coroutines.delay(300) // Brief delay to allow reattachment
+        
+        // One more try
+        try {
+            return BridgingCreator.shared().bridgeInstance(bridgeId)
+        } catch (e2: Exception) {
+            Log.e("SWKP", "Failed to get bridge instance after reattachment: ${e2.message}")
+            throw e2
+        }
+    }
 }
 
 suspend fun <T> BridgeId.bridgeInstance(): T? {
     BreadCrumbs.append("SuperwallKitFlutterPlugin.kt: Invoke bridgeInstance() in on $this")
-    return BridgingCreator.shared().bridgeInstance(this)
+    try {
+        return BridgingCreator.shared().bridgeInstance(this)
+    } catch (e: Exception) {
+        // If we can't get the instance, try to force reattachment and retry once
+        Log.e("SWKP", "Error getting bridge instance: ${e.message}")
+        BridgingCreator.forceReattachment(BridgingCreator.lastKnownBinding)
+        kotlinx.coroutines.delay(300) // Brief delay to allow reattachment
+        
+        // One more try
+        return BridgingCreator.shared().bridgeInstance(this)
+    }
 }
 
 fun MethodChannel.Result.badArgs(call: MethodCall) {
@@ -108,30 +187,46 @@ fun MethodChannel.Result.badArgs(method: String) {
 
 fun MethodChannel.invokeMethodOnMain(method: String, arguments: Any? = null) {
     runOnUiThread {
-        invokeMethod(method, arguments);
+        try {
+            invokeMethod(method, arguments);
+        } catch (e: Exception) {
+            Log.e("SWKP", "Error invoking method $method: ${e.message}")
+        }
     }
 }
 
 suspend fun MethodChannel.asyncInvokeMethodOnMain(method: String, arguments: Any? = null): Any? =
     suspendCancellableCoroutine { continuation ->
         runOnUiThread {
-            invokeMethod(method, arguments, object : MethodChannel.Result {
-                override fun success(result: Any?) {
-                    continuation.resume(result)
-                }
+            try {
+                invokeMethod(method, arguments, object : MethodChannel.Result {
+                    override fun success(result: Any?) {
+                        if (!continuation.isCompleted) {
+                            continuation.resume(result)
+                        }
+                    }
 
-                override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
-                    continuation.resumeWithException(
-                        RuntimeException("Error invoking method: $errorCode, $errorMessage")
-                    )
-                }
+                    override fun error(errorCode: String, errorMessage: String?, errorDetails: Any?) {
+                        if (!continuation.isCompleted) {
+                            continuation.resumeWithException(
+                                RuntimeException("Error invoking method: $errorCode, $errorMessage")
+                            )
+                        }
+                    }
 
-                override fun notImplemented() {
-                    continuation.resumeWithException(
-                        UnsupportedOperationException("Method not implemented: $method")
-                    )
+                    override fun notImplemented() {
+                        if (!continuation.isCompleted) {
+                            continuation.resumeWithException(
+                                UnsupportedOperationException("Method not implemented: $method")
+                            )
+                        }
+                    }
+                })
+            } catch (e: Exception) {
+                if (!continuation.isCompleted) {
+                    continuation.resumeWithException(e)
                 }
-            })
+            }
         }
     }
 

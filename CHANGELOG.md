@@ -6,8 +6,13 @@ The changelog for `Superwall`. Also see the [releases](https://github.com/superw
 
 ### Fixes
 
-- Fixes MissingPluginException during app backgrounding/foregrounding on Android
+- Completely resolves MissingPluginException during app backgrounding/foregrounding on Android and iOS
 - Maintains plugin state across Flutter engine detachment events
+- Adds robust retry and queueing mechanism for method calls during transitions
+- Implements proactive plugin health checks during app lifecycle changes
+- Adds plugin state management system to handle attachment state properly
+- Supports automatic reattachment if the plugin is found to be detached
+- Fixes Swift compilation issues with generic type parameters
 
 ## 2.0.7
 
