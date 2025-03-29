@@ -136,7 +136,12 @@ fun <T> MethodCall.argumentForKey(key: String): T? {
 
 // Enhanced bridgeInstance with better error handling
 suspend fun <T> MethodCall.bridgeInstance(key: String): T? {
-    BreadCrumbs.append("SuperwallKitFlutterPlugin.kt: Invoke bridgeInstance(key:) on $this. Key is $key")
+    try {
+        BreadCrumbs.append("SuperwallKitFlutterPlugin.kt: Invoke bridgeInstance(key:). Key is ${key ?: "null"}")
+    } catch (e: Exception) {
+        // Fail silently for logging issues
+    }
+    
     val bridgeId = this.argument<String>(key)
     if (bridgeId == null) {
         Log.e("SWKP", "No bridgeId found for key: $key")
@@ -144,7 +149,11 @@ suspend fun <T> MethodCall.bridgeInstance(key: String): T? {
     }
     
     try {
-        BreadCrumbs.append("SuperwallKitFlutterPlugin.kt: Invoke bridgeInstance(key:) in on $this. Found bridgeId $bridgeId")
+        try {
+            BreadCrumbs.append("SuperwallKitFlutterPlugin.kt: Found bridgeId $bridgeId")
+        } catch (e: Exception) {
+            // Fail silently for logging issues
+        }
         return BridgingCreator.shared().bridgeInstance(bridgeId)
     } catch (e: Exception) {
         // If we can't get the instance, try to force reattachment and retry once
@@ -163,7 +172,12 @@ suspend fun <T> MethodCall.bridgeInstance(key: String): T? {
 }
 
 suspend fun <T> BridgeId.bridgeInstance(): T? {
-    BreadCrumbs.append("SuperwallKitFlutterPlugin.kt: Invoke bridgeInstance() in on $this")
+    try {
+        BreadCrumbs.append("SuperwallKitFlutterPlugin.kt: Invoke bridgeInstance()")
+    } catch (e: Exception) {
+        // Fail silently for logging issues
+    }
+    
     try {
         return BridgingCreator.shared().bridgeInstance(this)
     } catch (e: Exception) {

@@ -6,7 +6,12 @@ object BreadCrumbs {
     private val logBuilder = StringBuilder()
 
     fun append(debugString: String) {
-        logBuilder.append(debugString).append("\n")
+        try {
+            logBuilder.append(debugString.toString()).append("\n")
+        } catch (e: Exception) {
+            // Safely handle any string conversion errors
+            logBuilder.append("[Error logging message]").append("\n")
+        }
     }
 
     fun logs(): String {
